@@ -1,5 +1,5 @@
-const CACHE_NAME = 'se-vault-v1';
-const URLS_TO_CACHE = ['/', '/manifest.json'];
+const CACHE_NAME = 'se-vault-v2';
+const URLS_TO_CACHE = ['./', './manifest.json', './index.html'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE)));
@@ -7,11 +7,20 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(response => response || fetch(e.request).catch(() => caches.match('/')))
+    caches.match(e.request).then(response => {
+      if (response) return response;
+      return fetch(e.request).catch(() => caches.match('./'));
+    })
   );
 });
