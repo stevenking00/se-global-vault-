@@ -2,7 +2,7 @@
   "name": "S.E. Global Vault",
   "short_name": "SE Vault",
   "description": "Strategic Knowledge & Asset Management System",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#0b0b0b",
   "theme_color": "#0b0b0b",
