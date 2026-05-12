@@ -503,4 +503,491 @@
       <div class="vault-status">
         <div class="status-row">
           <div class="status-dot"></div>
-          <span class="status-text">Vault Secur
+          <span class="status-text">Vault Secure</span>
+        </div>
+        <button class="lock-btn" onclick="lockVault()">🔒 Lock & Exit</button>
+      </div>
+      <nav class="nav-section" id="navSection"></nav>
+      <div style="margin-top:auto;padding-top:20px;border-top:1px solid var(--border);">
+        <p style="font-size:0.7rem;color:var(--text-muted);line-height:1.5;">
+          v1.0 · Offline Ready<br>
+          Metadata stored locally
+        </p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="header">
+        <div>
+          <h2 class="font-cinzel" id="pageTitle">Knowledge Vault</h2>
+          <p id="pageSubtitle">Internal archive for systems, research, operations, and creative IP.</p>
+        </div>
+        <div class="search-box">
+          <input type="text" class="search-input" id="searchInput" placeholder="Search assets, tags, systems..." oninput="renderFiles()">
+          <button class="btn-add" onclick="openModal()">+ Add Asset</button>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="statsGrid"></div>
+
+      <div class="file-grid" id="fileGrid"></div>
+
+      <div class="bottom-grid">
+        <div class="panel">
+          <h3 class="font-cinzel">Recent Activity</h3>
+          <div class="activity-list" id="activityList"></div>
+        </div>
+        <div class="panel">
+          <h3 class="font-cinzel">Vault Metrics</h3>
+          <div class="stats-grid" style="margin:0;">
+            <div class="stat-card" style="padding:16px;">
+              <p>Files Indexed</p>
+              <h4 id="metricFiles">0</h4>
+            </div>
+            <div class="stat-card" style="padding:16px;">
+              <p>Categories</p>
+              <h4 id="metricCategories">0</h4>
+            </div>
+            <div class="stat-card" style="padding:16px;">
+              <p>Drive Linked</p>
+              <h4 id="metricDrive">0</h4>
+            </div>
+            <div class="stat-card" style="padding:16px;">
+              <p>Local Notes</p>
+              <h4 id="metricNotes">0</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3 class="font-cinzel" id="modalTitle">Add New Asset</h3>
+      <div class="form-group">
+        <label>Asset Title</label>
+        <input type="text" id="fileTitle" class="input-field" style="margin-bottom:0;" placeholder="e.g. Edo Morphophonemics Notes">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Operational Arm</label>
+          <select id="fileCategory" class="input-field" style="margin-bottom:0;"></select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="fileDate" class="input-field" style="margin-bottom:0;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Source Type</label>
+        <div class="source-toggle">
+          <button type="button" onclick="setSource('drive')" id="btnDrive" class="source-btn active">Google Drive</button>
+          <button type="button" onclick="setSource('link')" id="btnLink" class="source-btn">External Link</button>
+          <button type="button" onclick="setSource('local')" id="btnLocal" class="source-btn">Local Note</button>
+        </div>
+      </div>
+      <div class="form-group" id="driveSection">
+        <label>Google Drive Share URL</label>
+        <input type="text" id="driveUrl" class="input-field" style="margin-bottom:0;" placeholder="https://drive.google.com/file/d/...">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;line-height:1.4;">Paste any shareable Drive link. The vault extracts the file ID and generates direct open/download routes.</p>
+      </div>
+      <div class="form-group" id="linkSection" style="display:none;">
+        <label>External URL</label>
+        <input type="text" id="externalUrl" class="input-field" style="margin-bottom:0;" placeholder="https://notion.so/...">
+      </div>
+      <div class="form-group" id="localSection" style="display:none;">
+        <label>Note Content</label>
+        <textarea id="localContent" class="input-field" style="min-height:120px;resize:vertical;margin-bottom:0;" placeholder="Enter SOP text, research notes, or operational intel..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Tags</label>
+        <div class="tag-input-container" onclick="document.getElementById('tagInput').focus()">
+          <div id="tagList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          <input type="text" id="tagInput" class="tag-input" placeholder="Type & hit Enter..." onkeydown="handleTagInput(event)">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-save" onclick="saveFile()">Save Asset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Note Viewer Modal -->
+  <div class="modal-overlay" id="noteModal" onclick="if(event.target===this)closeNoteModal()">
+    <div class="modal" style="max-width:600px;">
+      <h3 class="font-cinzel" id="noteTitle">Note</h3>
+      <div class="note-viewer" id="noteContent"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeNoteModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    // ==================== CONFIG ====================
+    const CATEGORIES = [
+      "Dashboard", "Service Delivery", "Systems Architecture", "Creative IP",
+      "Academy", "Visuals", "Operations", "Archive", "Inbox"
+    ];
+
+    // ==================== STATE ====================
+    let vaultData = { files: [], activity: [], passwordHash: null, settings: {} };
+    let currentCategory = "Dashboard";
+    let currentTags = [];
+    let currentSource = 'drive';
+    let editingId = null;
+
+    // ==================== CRYPTO ====================
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    // ==================== INIT ====================
+    function init() {
+      try {
+        const raw = localStorage.getItem('se_global_vault');
+        if (raw) {
+          try { vaultData = JSON.parse(raw); } catch(e) { console.error('Vault corrupt', e); }
+        }
+      } catch(e) {
+        console.error('localStorage access denied:', e);
+        toast('Storage access blocked. Try disabling private mode.', 'error');
+      }
+      if (!vaultData.passwordHash) {
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('setupForm').style.display = 'block';
+      } else {
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('setupForm').style.display = 'none';
+      }
+      populateCategories();
+    }
+
+    async function setupPassword() {
+      const p1 = document.getElementById('newPassword').value;
+      const p2 = document.getElementById('confirmPassword').value;
+      if (!p1 || p1.length < 4) { toast('Password must be at least 4 characters', 'error'); return; }
+      if (p1 !== p2) { toast('Passwords do not match', 'error'); return; }
+      try {
+        vaultData.passwordHash = await sha256(p1);
+        saveVault();
+        toast('Vault initialized. Welcome, Director.', 'success');
+        enterVault();
+        logActivity('Vault initialized and secured.');
+      } catch(e) {
+        console.error('Setup error:', e);
+        toast('Setup failed. Check console.', 'error');
+      }
+    }
+
+    async function authenticate() {
+      const input = document.getElementById('passwordInput').value;
+      if (!input) { toast('Enter a password', 'error'); return; }
+      try {
+        const hash = await sha256(input);
+        if (hash === vaultData.passwordHash) {
+          toast('Vault unlocked.', 'success');
+          enterVault();
+        } else {
+          toast('Invalid credentials.', 'error');
+          document.getElementById('passwordInput').value = '';
+        }
+      } catch(e) {
+        console.error('Auth error:', e);
+        toast('Unlock failed. Check console.', 'error');
+      }
+    }
+
+    function enterVault() {
+      const overlay = document.getElementById('loginOverlay');
+      const app = document.getElementById('app');
+      
+      // INSTANT reveal - no animations that can fail on mobile
+      overlay.style.display = 'none';
+      overlay.style.visibility = 'hidden';
+      overlay.style.opacity = '0';
+      
+      app.style.display = 'flex';
+      app.style.opacity = '1';
+      app.style.visibility = 'visible';
+      
+      // Render with error isolation
+      try { renderNav(); } catch(e) { console.error('renderNav:', e); }
+      try { renderStats(); } catch(e) { console.error('renderStats:', e); }
+      try { renderFiles(); } catch(e) { console.error('renderFiles:', e); }
+      try { renderActivity(); } catch(e) { console.error('renderActivity:', e); }
+      
+      // Safe date init
+      const dateInput = document.getElementById('fileDate');
+      if (dateInput) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        dateInput.value = yyyy + '-' + mm + '-' + dd;
+      }
+    }
+
+    function lockVault() {
+      location.reload();
+    }
+
+    function saveVault() {
+      try {
+        localStorage.setItem('se_global_vault', JSON.stringify(vaultData));
+      } catch(e) {
+        console.error('Save failed:', e);
+        toast('Could not save to storage.', 'error');
+      }
+    }
+
+    function logActivity(msg) {
+      vaultData.activity.unshift({ text: msg, time: new Date().toISOString() });
+      if (vaultData.activity.length > 30) vaultData.activity.pop();
+      saveVault();
+      renderActivity();
+    }
+
+    // ==================== NAVIGATION ====================
+    function renderNav() {
+      const nav = document.getElementById('navSection');
+      nav.innerHTML = CATEGORIES.map(cat => `
+        <button class="nav-item ${cat===currentCategory?'active':''}" onclick="setCategory('${cat}')">
+          <span class="nav-icon">${getIcon(cat)}</span>
+          <span>${cat}</span>
+          <span class="nav-count">${countInCategory(cat)}</span>
+        </button>
+      `).join('');
+    }
+
+    function setCategory(cat) {
+      currentCategory = cat;
+      renderNav();
+      renderFiles();
+      document.getElementById('pageTitle').textContent = cat === 'Dashboard' ? 'Knowledge Vault' : cat;
+      if (window.innerWidth < 1024) toggleSidebar();
+    }
+
+    function countInCategory(cat) {
+      if (cat === 'Dashboard') return vaultData.files.length;
+      return vaultData.files.filter(f => f.category === cat).length;
+    }
+
+    function getIcon(cat) {
+      const icons = {
+        'Dashboard':'◈','Service Delivery':'◉','Systems Architecture':'◆',
+        'Creative IP':'◊','Academy':'○','Visuals':'▽','Operations':'□','Archive':'▣','Inbox':'✉'
+      };
+      return icons[cat] || '•';
+    }
+
+    function populateCategories() {
+      const sel = document.getElementById('fileCategory');
+      sel.innerHTML = CATEGORIES.filter(c => c !== 'Dashboard').map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    // ==================== RENDERING ====================
+    function renderStats() {
+      const grid = document.getElementById('statsGrid');
+      const cats = new Set(vaultData.files.map(f => f.category));
+      const driveCount = vaultData.files.filter(f => f.source === 'drive').length;
+      const noteCount = vaultData.files.filter(f => f.source === 'local').length;
+
+      grid.innerHTML = `
+        <div class="stat-card">
+          <p>Total Assets</p>
+          <h4>${vaultData.files.length}</h4>
+        </div>
+        <div class="stat-card">
+          <p>Operational Arms</p>
+          <h4>${cats.size}</h4>
+        </div>
+        <div class="stat-card">
+          <p>Drive Linked</p>
+          <h4>${driveCount}</h4>
+        </div>
+        <div class="stat-card">
+          <p>Local Notes</p>
+          <h4>${noteCount}</h4>
+        </div>
+      `;
+      document.getElementById('metricFiles').textContent = vaultData.files.length;
+      document.getElementById('metricCategories').textContent = cats.size;
+      document.getElementById('metricDrive').textContent = driveCount;
+      document.getElementById('metricNotes').textContent = noteCount;
+    }
+
+    function renderFiles() {
+      const grid = document.getElementById('fileGrid');
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      let files = [...vaultData.files];
+      if (currentCategory !== 'Dashboard') files = files.filter(f => f.category === currentCategory);
+      if (query) {
+        files = files.filter(f =>
+          f.title.toLowerCase().includes(query) ||
+          f.tags.some(t => t.toLowerCase().includes(query)) ||
+          f.category.toLowerCase().includes(query)
+        );
+      }
+
+      if (files.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <h3>${query ? 'No matches found' : 'This arm is empty'}</h3>
+            <p>${query ? 'Try a broader search term or check your tags.' : 'Add your first asset to begin indexing this operational category.'}</p>
+          </div>`;
+        return;
+      }
+
+      grid.innerHTML = files.map(f => {
+        const isDrive = f.source === 'drive';
+        const isLink = f.source === 'link';
+        const isLocal = f.source === 'local';
+        let actions = '';
+        if (isDrive) {
+          actions = `
+            <a href="https://drive.google.com/file/d/${f.driveId}/view" target="_blank" rel="noopener" class="btn-small">Open</a>
+            <a href="https://drive.google.com/uc?export=download&id=${f.driveId}" target="_blank" rel="noopener" class="btn-small primary">Download</a>
+          `;
+        } else if (isLink) {
+          actions = `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener" class="btn-small primary">Open Link</a>`;
+        } else {
+          actions = `<button onclick="viewNote('${f.id}')" class="btn-small primary">Read Note</button>`;
+        }
+        return `
+        <div class="file-card">
+          <div class="file-header">
+            <div style="min-width:0;">
+              <div class="file-title font-cinzel">${escapeHtml(f.title)}</div>
+              <div class="file-category">${f.category}</div>
+            </div>
+            <div class="file-badge">${isDrive?'Drive':isLink?'Link':'Note'}</div>
+          </div>
+          <div class="file-tags">
+            ${f.tags.map(t => `<span class="file-tag">#${escapeHtml(t)}</span>`).join('')}
+          </div>
+          <div class="file-footer">
+            <span class="file-date">${formatDate(f.date)}</span>
+            <div class="file-actions">
+              ${actions}
+              <button onclick="editFile('${f.id}')" class="btn-small btn-icon" title="Edit">✎</button>
+              <button onclick="deleteFile('${f.id}')" class="btn-small btn-icon" style="color:var(--danger);border-color:rgba(139,58,58,0.5);" title="Delete">✕</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      renderStats();
+    }
+
+    function renderActivity() {
+      const list = document.getElementById('activityList');
+      if (!vaultData.activity.length) {
+        list.innerHTML = '<div class="activity-item">No activity recorded yet.</div>';
+        return;
+      }
+      list.innerHTML = vaultData.activity.slice(0, 7).map(a => `
+        <div class="activity-item">
+          ${escapeHtml(a.text)}
+          <span class="activity-time">${timeAgo(a.time)}</span>
+        </div>
+      `).join('');
+    }
+
+    // ==================== MODAL & FORM ====================
+    function openModal(id = null) {
+      editingId = id;
+      currentTags = [];
+      document.getElementById('modal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+      document.getElementById('modalTitle').textContent = id ? 'Edit Asset' : 'Add New Asset';
+      document.getElementById('tagList').innerHTML = '';
+
+      if (id) {
+        const f = vaultData.files.find(x => x.id === id);
+        document.getElementById('fileTitle').value = f.title;
+        document.getElementById('fileCategory').value = f.category;
+        document.getElementById('fileDate').value = f.date;
+        setSource(f.source);
+        if (f.source === 'drive') document.getElementById('driveUrl').value = f.driveUrl || '';
+        if (f.source === 'link') document.getElementById('externalUrl').value = f.url || '';
+        if (f.source === 'local') document.getElementById('localContent').value = f.content || '';
+        currentTags = [...f.tags];
+        renderTags();
+      } else {
+        document.getElementById('fileTitle').value = '';
+        document.getElementById('driveUrl').value = '';
+        document.getElementById('externalUrl').value = '';
+        document.getElementById('localContent').value = '';
+        document.getElementById('fileDate').valueAsDate = new Date();
+        setSource('drive');
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('active');
+      document.body.style.overflow = '';
+      editingId = null;
+    }
+
+    function setSource(src) {
+      currentSource = src;
+      document.getElementById('driveSection').style.display = src === 'drive' ? 'block' : 'none';
+      document.getElementById('linkSection').style.display = src === 'link' ? 'block' : 'none';
+      document.getElementById('localSection').style.display = src === 'local' ? 'block' : 'none';
+      ['btnDrive','btnLink','btnLocal'].forEach(id => {
+        const el = document.getElementById(id);
+        const name = id.replace('btn','').toLowerCase();
+        el.classList.toggle('active', name === src);
+      });
+    }
+
+    function handleTagInput(e) {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const val = e.target.value.trim().toLowerCase().replace(/,/g,'');
+        if (val && !currentTags.includes(val) && currentTags.length < 12) {
+          currentTags.push(val);
+          renderTags();
+        }
+        e.target.value = '';
+      }
+    }
+
+    function renderTags() {
+      document.getElementById('tagList').innerHTML = currentTags.map((t,i) => `
+        <span class="tag-chip">${escapeHtml(t)}<button onclick="removeTag(${i})">×</button></span>
+      `).join('');
+    }
+
+    function removeTag(i) {
+      currentTags.splice(i, 1);
+      renderTags();
+    }
+
+    function saveFile() {
+      const title = document.getElementById('fileTitle').value.trim();
+      const category = document.getElementById('fileCategory').value;
+      const date = document.getElementById('fileDate').value || new Date().toISOString().split('T')[0];
+      if (!title) { toast('Title is required', 'error'); return; }
+
+      let fileData = {
+        id: editingId || crypto.randomUUID(),
+        title, category, date, tags: currentTags, source: currentSource,
+        createdAt: editingId ? (vaultData.files.find(f=>f.id===editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString()
+      };
+
+      if (currentSource === 'drive') {
+        const url = document.getElementById('driveUrl').value.trim();
+        const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/) || url.match(/^([a-zA-Z0-9_-]{25,})$/);
+        if (!match) { toast('Invalid Google Drive URL. Use a shareable link.', 'error'); return; }
+        fileData.driveId = match[1];
+        fileData.driveUrl = url;
+      } else if (currentSource === 'link') {
+        const url = document.getElementById('externalUrl').value.trim();
+        if (!url || !url.startsW
